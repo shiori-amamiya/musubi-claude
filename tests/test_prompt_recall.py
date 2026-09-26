@@ -209,6 +209,9 @@ class FakeGet:
     def kill(self) -> None:
         pass
 
+    def wait(self) -> int:
+        return self.returncode
+
 
 def truncated(object_id: str, relevance: float, snippet: str = "User: what did we decide") -> dict[str, Any]:
     return {**row(object_id, relevance, snippet), "content_truncated": True}
@@ -261,3 +264,18 @@ def test_no_field_can_break_out_of_its_item_line(monkeypatch: pytest.MonkeyPatch
     assert not any(line.startswith("- [ep-fake") or line.startswith("- [ep-x]") for line in text.splitlines())
     assert "\x1b" not in text and " " not in text and "\r" not in text
     assert items[0].startswith("- [? · ? · matured")
+
+
+def test_a_short_superseded_memory_is_dropped_too(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # Search rows carry no superseded_by or dates, so even an untruncated row
+    # must be fetched to learn it has been replaced.
+    hook = load(monkeypatch, tmp_path, **VERIFIED)
+    FakeGet.objects = {
+        "ep-short-old": {"content": "old plan", "created_at": "2026-09-20T00:00:00Z", "superseded_by": ["ep-new"]},
+        "ep-new": {"content": "new plan", "created_at": "2026-09-26T00:00:00Z"},
+    }
+    monkeypatch.setattr(hook.subprocess, "Popen", FakeGet)
+    monkeypatch.setattr(hook, "search", lambda config, query: [row("ep-short-old", 0.8, "old plan"), row("ep-new", 0.7, "new plan")])
+    out, _ = run_hook(hook, monkeypatch, PROMPT)
+    text = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "ep-short-old" not in text and "· 2026-09-26 ·" in text

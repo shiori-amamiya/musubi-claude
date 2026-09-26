@@ -119,7 +119,7 @@ def select(rows: list[dict[str, Any]], seen: set[str]) -> list[dict[str, Any]]:
 
 
 def fetch_full(config: Any, items: list[dict[str, Any]], deadline: float) -> None:
-    """Replace truncated snippets with full objects, in parallel, within the deadline.
+    """Fetch each candidate's full object, in parallel, within the deadline.
 
     Musubi search returns 300-character snippets by spec and marks the cut
     (content_truncated); the full body, its dates and its lifecycle links come
@@ -127,8 +127,9 @@ def fetch_full(config: Any, items: list[dict[str, Any]], deadline: float) -> Non
     """
     running = []
     for item in items:
-        if not item.get("content_truncated"):
-            continue
+        # Every candidate, not only truncated ones: search rows carry no dates
+        # and no superseded_by, so a short memory needs the get as much as a
+        # long one (Aoi's review of #17).
         args = {"object_id": item["object_id"], "plane": item.get("plane"), "namespace": item.get("namespace")}
         try:
             command = _facade.command_for(config, "musubi_get", args)
@@ -144,6 +145,7 @@ def fetch_full(config: Any, items: list[dict[str, Any]], deadline: float) -> Non
             full = json.loads(out) if proc.returncode == 0 else None
         except (subprocess.TimeoutExpired, ValueError):
             proc.kill()
+            proc.wait()
             full = None
         if isinstance(full, dict) and isinstance(full.get("content"), str):
             item["content"] = full["content"]
