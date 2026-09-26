@@ -18,6 +18,7 @@ lookup. Same state root: ``$PLUGIN_DATA`` (set by Claude Code) or
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Mapping, MutableMapping
 from pathlib import Path
 
@@ -61,6 +62,44 @@ def apply_transport_settings(env: MutableMapping[str, str]) -> str:
     return source
 
 
+# Plugin options are per OS user (one pluginConfigs block, one keychain token), so on
+# a host where several seats share a user they cannot express a per-seat identity
+# (Aoi's 0.5.0 canary: a local-scope install still wrote her identity globally).
+_SEAT_OWNED_OPTIONS = ("ACTOR", "SEAT", "ZONE", "DELIVERY_MODE", "MUSUBI_URL", "MUSUBI_TOKEN")
+
+
+def apply_seat_environment(env: MutableMapping[str, str]) -> bool:
+    """A seat whose launcher sets MUSUBI_ACTOR owns identity AND transport.
+
+    For that process the per-user identity and transport options are dropped
+    (whatever /config holds cannot make this seat run as someone else, or with
+    their token), and the plugin's own harness is used rather than a legacy
+    config.json pin: its venv's ``musubi-harness`` unless the launcher set
+    MUSUBI_HARNESS_BIN, and its bundled ``musubi-memory-data`` whenever the seat
+    supplies MUSUBI_API_URL and MUSUBI_TOKEN. Without those two the harness falls
+    back to whatever memory-data is configured; health reports which one runs.
+
+    Returns True when the seat owns its identity.
+    """
+    if not env.get("MUSUBI_ACTOR", "").strip():
+        return False
+    for key in _SEAT_OWNED_OPTIONS:
+        env.pop(_OPTION + key, None)
+    venv_bin = Path(sys.executable).parent
+    harness = venv_bin / "musubi-harness"
+    if not env.get("MUSUBI_HARNESS_BIN", "").strip() and harness.is_file():
+        env["MUSUBI_HARNESS_BIN"] = str(harness)
+    bundled = venv_bin / "musubi-memory-data"
+    if (
+        env.get("MUSUBI_API_URL", "").strip()
+        and env.get("MUSUBI_TOKEN", "").strip()
+        and not env.get("MUSUBI_MEMORY_DATA_BIN", "").strip()
+        and bundled.is_file()
+    ):
+        env["MUSUBI_MEMORY_DATA_BIN"] = str(bundled)
+    return True
+
+
 def apply_plugin_settings(environ: MutableMapping[str, str] | None = None) -> str:
     """Map this plugin's settings onto the harness identity, in-process only.
 
@@ -71,9 +110,14 @@ def apply_plugin_settings(environ: MutableMapping[str, str] | None = None) -> st
     without seat) is passed through as-is so the harness refuses it with
     ``partial_identity_config_refused`` instead of guessing.
 
-    Returns "settings" or "legacy", for status and tests.
+    A seat launcher that sets MUSUBI_ACTOR takes precedence over all of this
+    (see apply_seat_environment).
+
+    Returns "environment", "settings" or "legacy", for status and tests.
     """
     env = os.environ if environ is None else environ
+    if apply_seat_environment(env):
+        return "environment"
     apply_transport_settings(env)
     actor = env.get(_OPTION + "ACTOR", "").strip()
     seat = env.get(_OPTION + "SEAT", "").strip()
