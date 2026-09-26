@@ -87,7 +87,7 @@ def test_manifest_and_mcp_forward_the_same_option_names() -> None:
     root = Path(__file__).resolve().parent.parent
     options = set(json.loads((root / ".claude-plugin" / "plugin.json").read_text())["userConfig"])
     env = json.loads((root / ".mcp.json").read_text())["mcpServers"]["musubi-claude"]["env"]
-    assert options == {"actor", "seat", "zone", "delivery_mode", "musubi_url", "musubi_token"}
+    assert options == {"actor", "seat", "zone", "delivery_mode", "musubi_url", "musubi_token", "prompt_recall"}
     assert env == {OPTION + key.upper(): f"${{user_config.{key}}}" for key in options}
 
 

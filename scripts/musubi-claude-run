@@ -15,7 +15,7 @@
 set -u
 component="${1:-}"
 case "$component" in
-  stop|session-start|mcp|health) ;;
+  stop|session-start|mcp|health|prompt) ;;
   *) echo "musubi-claude-run: unknown component '$component'" >&2; exit 2 ;;
 esac
 root="${CLAUDE_PLUGIN_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
@@ -76,6 +76,12 @@ if [ "$reason" = harness_outdated ]; then
   problem="musubi-harness $installed is older than the required $required"
 else
   problem="musubi-harness is not installed"
+fi
+
+# Not set up (or out of date). Prompt recall stays silent and records nothing:
+# it runs on every prompt, and session-start already tells the user once.
+if [ "$component" = prompt ]; then
+  exit 0
 fi
 
 # Not set up (or out of date). The health report says so as data and records

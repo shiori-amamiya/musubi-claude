@@ -63,6 +63,17 @@
       "description": "Your Musubi API token (a JWT). Stored in the system credential store, never in settings.json.",
       "sensitive": true,
       "default": ""
+    },
+    "prompt_recall": {
+      "type": "string",
+      "title": "Prompt recall",
+      "description": "Before each answer, search Musubi with your prompt and add the few memories that are actually about it. auto: only when Delivery mode is verified (the prompt text is sent as the search query). A prompt that looks like it contains a credential is never sent.",
+      "options": [
+        "auto",
+        "on",
+        "off"
+      ],
+      "default": "auto"
     }
   }
 }
