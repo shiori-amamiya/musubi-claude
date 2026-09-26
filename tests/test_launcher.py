@@ -169,3 +169,16 @@ def test_a_stale_newer_harness_elsewhere_cannot_hide_an_outdated_one(tmp_path: P
     venv_with_pythons(data, "3.12.14", {"3.12": "1.0.1", "3.14": "99.0.0"}, cfg_key="version")
     health = json.loads(run("health", data).stdout)
     assert (health["error"], health["installed"]) == ("harness_outdated", "1.0.1")
+
+
+@pytest.mark.parametrize("with_cfg", [True, False], ids=["pyvenv.cfg", "fallback scan"])
+def test_a_data_path_with_spaces_still_finds_the_harness(tmp_path: Path, with_cfg: bool) -> None:
+    # Aoi's review of #20: an unquoted glob word-split the path, so every hook
+    # silently took the not-set-up path. Plugin data paths can contain spaces.
+    data = tmp_path / "plugin data with spaces"
+    if with_cfg:
+        venv_with_pythons(data, "3.14", {"3.14": REQUIRED})
+    else:
+        fake_venv(data, REQUIRED)
+    result = run("stop", data)
+    assert result.stdout.startswith("ran ") and not (data / "degraded.jsonl").exists()

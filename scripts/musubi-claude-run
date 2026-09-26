@@ -52,22 +52,24 @@ if [ -x "$data/venv/bin/python" ]; then
   # interpreter the venv runs (pyvenv.cfg: uv writes version_info, venv writes
   # version). Re-running setup can move a venv to a newer Python in place and
   # leave the old lib/pythonX.Y behind with a stale harness in it.
-  site="$data/venv/lib/python*/site-packages"
   pyver="$(sed -n -e 's/^version_info *= *\([0-9]*\.[0-9]*\).*/\1/p' -e 's/^version *= *\([0-9]*\.[0-9]*\).*/\1/p' \
     "$data/venv/pyvenv.cfg" 2>/dev/null | head -n 1)"
+  # scan DIR: the highest harness version in one site-packages directory. The
+  # caller quotes DIR, so a data path with spaces stays one word (Aoi's review).
+  scan() {
+    for info in "$1"/musubi_harness-*.dist-info; do
+      [ -d "$info" ] || continue
+      found="${info##*/musubi_harness-}"; found="${found%.dist-info}"
+      # The highest version wins, never the lexically last directory.
+      if [ -z "$installed" ] || version_lt "$installed" "$found"; then installed="$found"; fi
+      python="$data/venv/bin/python"
+    done
+  }
   if [ -n "$pyver" ] && [ -d "$data/venv/lib/python$pyver/site-packages" ]; then
-    site="$data/venv/lib/python$pyver/site-packages"
+    scan "$data/venv/lib/python$pyver/site-packages"
+  else
+    for s in "$data"/venv/lib/python*/site-packages; do scan "$s"; done
   fi
-  # shellcheck disable=SC2086  # $site may be a glob when pyvenv.cfg is absent
-  for info in $site/musubi_harness-*.dist-info; do
-    [ -d "$info" ] || continue
-    found="${info##*/musubi_harness-}"; found="${found%.dist-info}"
-    # The highest version wins, never the lexically last directory.
-    if [ -z "$installed" ] || version_lt "$installed" "$found"; then
-      installed="$found"
-    fi
-    python="$data/venv/bin/python"
-  done
 elif command -v python3 >/dev/null 2>&1; then
   installed="$(python3 -c 'import importlib.metadata as m, musubi_harness; print(m.version("musubi-harness"))' 2>/dev/null)"
   [ -n "$installed" ] && python="$(command -v python3)"
