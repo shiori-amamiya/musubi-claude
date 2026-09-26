@@ -39,6 +39,7 @@ from musubi_claude_runtime import (
     harness_bin,
     memory_data_bin,
     plugin_config,
+    local_tool_environment,
     runtime_config,
     tool_environment,
 )
@@ -405,6 +406,8 @@ def main() -> int:
             capture_output=True,
             timeout=8,
             check=False,
+            # A local outbox write: identity, but no Musubi credentials.
+            env=local_tool_environment(configured),
         )
         if result.returncode != 0:
             # Stable code + exit status ONLY. The child's stdout/stderr can echo the
@@ -417,11 +420,14 @@ def main() -> int:
         # env MUST carry the configured identity: the drainer's MemoryDataClient otherwise
         # inherits ambient env, and a Stop hook runs at an arbitrary cwd where FLEET_IDENTITY/
         # FLEET_PRESENCE are absent — the write would refuse or resolve identity from cwd.
-        delivery_env = tool_environment(configured)
+        # Only the drain talks to Musubi, so only the drain gets the credentials;
+        # stage is a local outbox transition like enqueue.
+        remote_env = tool_environment(configured)
+        local_env = local_tool_environment(configured)
         for command, timeout in delivery_commands(envelope, configured):
             result = subprocess.run(
                 command, text=True, capture_output=True, timeout=timeout, check=False,
-                env=delivery_env,
+                env=remote_env if command[3] == "drain" else local_env,
             )
             if result.returncode != 0:
                 # Same invariant as the enqueue path: exit code is diagnosis, output is content.

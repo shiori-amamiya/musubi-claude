@@ -127,3 +127,11 @@ def test_empty_transport_settings_never_clear_an_existing_setup() -> None:
 def test_transport_settings_outrank_an_inherited_environment() -> None:
     env = {"MUSUBI_API_URL": "https://old.example", **settings(musubi_url="https://new.example")}
     assert transport_env(env)["MUSUBI_API_URL"] == "https://new.example"
+
+
+def test_the_option_copy_of_the_token_is_dropped_after_mapping() -> None:
+    env = settings(musubi_token="a.b.c")
+    with patch.dict(os.environ, env, clear=True):
+        apply_plugin_settings()
+        assert os.environ["MUSUBI_TOKEN"] == "a.b.c"
+        assert OPTION + "MUSUBI_TOKEN" not in os.environ

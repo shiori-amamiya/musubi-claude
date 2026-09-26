@@ -54,6 +54,10 @@ def apply_transport_settings(env: MutableMapping[str, str]) -> str:
         if value:
             env[target] = value
             source = "settings"
+    # Claude Code exports the sensitive option under its own name too. Keep
+    # MUSUBI_TOKEN as the only holder, so stripping it (local_tool_environment)
+    # really leaves a local subprocess without the credential. (Aoi's review.)
+    env.pop(_OPTION + "MUSUBI_TOKEN", None)
     return source
 
 
@@ -139,6 +143,9 @@ runtime_config = _runtime.runtime_config
 harness_bin = _runtime.harness_bin
 memory_data_bin = _runtime.memory_data_bin
 tool_environment = _runtime.tool_environment
+# For subprocesses that only touch the local outbox (enqueue, stage, remember):
+# tool_environment minus MUSUBI_API_URL / MUSUBI_TOKEN. musubi-harness >= 1.1.0.
+local_tool_environment = _runtime.local_tool_environment
 require_owned_namespace = _runtime.require_owned_namespace
 
 # Re-export the harness's exception type so adapter scripts can catch
@@ -159,5 +166,6 @@ __all__ = [
     "harness_bin",
     "memory_data_bin",
     "tool_environment",
+    "local_tool_environment",
     "require_owned_namespace",
 ]
