@@ -1,0 +1,27 @@
+#!/bin/sh
+# Explicit, one-time install of the pinned musubi-harness into the plugin's own
+# environment ($CLAUDE_PLUGIN_DATA/venv). Run this yourself or via
+# /musubi-claude:setup; hooks never do it. Needs network once; afterwards the
+# hooks run offline. Re-running upgrades or repairs the environment in place.
+set -eu
+root="${CLAUDE_PLUGIN_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
+data="${CLAUDE_PLUGIN_DATA:-$HOME/.local/state/musubi-claude}"
+requirement="$(cat "$root/scripts/harness-requirement")"
+venv="$data/venv"
+mkdir -p "$data"
+
+if command -v uv >/dev/null 2>&1; then
+  uv venv --quiet --allow-existing --python ">=3.12" "$venv"
+  uv pip install --quiet --python "$venv/bin/python" "$requirement"
+else
+  python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)' || {
+    echo "musubi-claude setup: needs Python 3.12+ (or install uv: https://docs.astral.sh/uv/)" >&2
+    exit 1
+  }
+  python3 -m venv "$venv"
+  "$venv/bin/python" -m pip install --quiet --upgrade pip
+  "$venv/bin/python" -m pip install --quiet "$requirement"
+fi
+
+version="$("$venv/bin/python" -c 'import importlib.metadata as m, musubi_harness; print(m.version("musubi-harness"))')"
+echo "musubi-claude: musubi-harness $version installed in $venv"

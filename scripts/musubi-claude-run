@@ -1,0 +1,48 @@
+#!/bin/sh
+# Launch a musubi-claude hook or the MCP server with a Python that can import
+# musubi-harness. Never installs anything and never touches the network: the
+# explicit setup step (scripts/musubi-claude-setup, or /musubi-claude:setup)
+# builds the environment ahead of time.
+#
+# Python, in order:
+#   1. the plugin's own environment: $CLAUDE_PLUGIN_DATA/venv/bin/python
+#   2. a python3 on PATH that already imports musubi_harness (e.g. a user who
+#      ran `pip install musubi-harness` themselves)
+# Otherwise the hook refuses to run, records why, and exits 0 so the Claude
+# Code session continues. The MCP server exits non-zero so /mcp shows it failed.
+set -u
+component="${1:-}"
+case "$component" in
+  stop|session-start|mcp) ;;
+  *) echo "musubi-claude-run: unknown component '$component'" >&2; exit 2 ;;
+esac
+root="${CLAUDE_PLUGIN_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
+data="${CLAUDE_PLUGIN_DATA:-$HOME/.local/state/musubi-claude}"
+script="$root/scripts/musubi-claude-$component"
+
+python=""
+if [ -x "$data/venv/bin/python" ]; then
+  python="$data/venv/bin/python"
+elif command -v python3 >/dev/null 2>&1 && python3 -c "import musubi_harness" >/dev/null 2>&1; then
+  python="$(command -v python3)"
+fi
+
+if [ -n "$python" ]; then
+  exec "$python" "$script"
+fi
+
+# Not set up. Record it the same way other degradations are recorded, without
+# reading or storing any conversation content.
+mkdir -p "$data" 2>/dev/null
+printf '{"at": "%s", "reason": "harness_unavailable:%s"}\n' \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$component" >> "$data/degraded.jsonl" 2>/dev/null
+case "$component" in
+  mcp)
+    echo "musubi-claude: musubi-harness is not installed. Run /musubi-claude:setup, then restart." >&2
+    exit 1 ;;
+  session-start)
+    printf '%s\n' '{"systemMessage": "Musubi memory is not set up yet, so nothing is captured or recalled. Run /musubi-claude:setup once."}'
+    exit 0 ;;
+  *)
+    exit 0 ;;
+esac

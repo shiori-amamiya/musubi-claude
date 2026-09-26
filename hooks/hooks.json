@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/scripts/musubi-claude-session-start\"",
+            "command": "\"$CLAUDE_PLUGIN_ROOT/scripts/musubi-claude-run\" session-start",
             "timeout": 7
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PLUGIN_ROOT/scripts/musubi-claude-stop\"",
+            "command": "\"$CLAUDE_PLUGIN_ROOT/scripts/musubi-claude-run\" stop",
             "timeout": 30
           }
         ]
