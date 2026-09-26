@@ -97,3 +97,23 @@ def test_malformed_remote_settings_never_block_a_local_capture(monkeypatch: pyte
     assert not (root / "degraded.jsonl").exists()
     with sqlite3.connect(root / "aoi" / "home" / "shadow.db") as conn:
         assert conn.execute("SELECT disposition FROM capture_events").fetchall() == [("shadow",)]
+
+
+def test_only_the_drain_is_declared_remote(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # The flag is structural: find each command by its subcommand anywhere in
+    # argv, so this holds even if the argv layout changes.
+    stop = load_stop(
+        monkeypatch,
+        tmp_path,
+        **SETTINGS,
+        **{OPTION + "DELIVERY_MODE": "verified"},
+        MUSUBI_HARNESS_BIN="/opt/fake/musubi-harness",
+        MUSUBI_MEMORY_DATA_BIN="/opt/fake/memory-data",
+    )
+    configured = stop.runtime_config()
+    envelope = {"actor": "aoi", "zone": "home", "event_id": "claude-code:s:p"}
+    flags = {
+        ("drain" if "drain" in argv else "stage" if "stage" in argv else "?"): remote
+        for argv, _, remote in stop.delivery_commands(envelope, configured)
+    }
+    assert flags == {"stage": False, "drain": True}
