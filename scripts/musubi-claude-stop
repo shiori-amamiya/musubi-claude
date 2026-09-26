@@ -313,11 +313,26 @@ def _harness() -> str:
         raise AdapterError(str(exc)) from exc
 
 
+# One drain pass per turn delivers one row, so a backlog never shrinks (measured
+# 2026-09-26: median delivery lag 66 minutes). musubi-harness >= 1.2.0 can deliver
+# several rows per pass. The harness that runs is whatever binary is configured, not
+# necessarily this venv's, so an older one that rejects the flags is retried once
+# without them (see without_batch_flags).
+BATCH_DRAIN = ["--max", "5", "--budget-seconds", "10"]
+
+
+def without_batch_flags(command: list[str]) -> list[str] | None:
+    """The same drain without the batch flags, or None if it had none."""
+    if not command[-len(BATCH_DRAIN) :] == BATCH_DRAIN:
+        return None
+    return command[: -len(BATCH_DRAIN)]
+
+
 def delivery_commands(
     envelope: dict[str, Any], configured: RuntimeConfig
 ) -> list[tuple[list[str], int, bool]]:
     """Shadow mode → no remote delivery. Verified mode → stage the just-enqueued event and
-    run ONE bounded shared-drainer pass. The drainer owns the durable receipt + exact
+    run one bounded shared-drainer pass (up to several rows on harness >= 1.2.0). The drainer owns the durable receipt + exact
     readback; this adapter never POSTs Musubi directly and never treats a queued row as
     verified. Same wiring as the Codex seat — separate outbox, identical contract.
 
@@ -345,6 +360,7 @@ def delivery_commands(
                 memory_data,
                 "--timeout",
                 "5",
+                *BATCH_DRAIN,
             ],
             15,
             True,
@@ -430,10 +446,12 @@ def main() -> int:
         remote_env = tool_environment(configured)
         local_env = local_tool_environment(configured)
         for command, timeout, remote in delivery_commands(envelope, configured):
-            result = subprocess.run(
-                command, text=True, capture_output=True, timeout=timeout, check=False,
-                env=remote_env if remote else local_env,
-            )
+            env = remote_env if remote else local_env
+            result = subprocess.run(command, text=True, capture_output=True, timeout=timeout, check=False, env=env)
+            fallback = without_batch_flags(command) if result.returncode == 2 else None
+            if fallback is not None and "unrecognized arguments" in (result.stderr or ""):
+                # An older harness binary: deliver one row, as it always did.
+                result = subprocess.run(fallback, text=True, capture_output=True, timeout=timeout, check=False, env=env)
             if result.returncode != 0:
                 # Same invariant as the enqueue path: exit code is diagnosis, output is content.
                 raise AdapterError(f"verified_delivery_failed:exit={result.returncode}")
