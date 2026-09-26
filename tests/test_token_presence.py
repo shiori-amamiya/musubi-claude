@@ -114,3 +114,24 @@ def test_an_unverified_subject_cannot_forge_a_line(monkeypatch: pytest.MonkeyPat
     message = json.loads(run_main(module, monkeypatch))["systemMessage"]
     assert "\n" not in message and "\r" not in message and "\x1b" not in message and "forged" not in message
     assert "the Musubi token is for an unrecognised subject, but this seat is aoi/command-chair" in message
+
+
+@pytest.mark.parametrize("claims", [{"scope": "aoi/command-chair/*:rw"}, {"sub": None, "scope": "aoi/command-chair/*:rw"}])
+def test_a_token_without_a_usable_subject_is_reported(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, claims: dict[str, Any]) -> None:
+    module = load(monkeypatch, tmp_path, jwt(claims))
+    assert "the Musubi token is for an unrecognised subject" in (module.token_warning() or "")
+
+
+def test_the_fix_points_where_this_seats_token_comes_from(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # load() sets MUSUBI_ACTOR in env: an env seat, whose token comes from its launcher.
+    module = load(monkeypatch, tmp_path, VOICE)
+    warning = module.token_warning() or ""
+    assert module.settings_source == "environment"
+    assert "comes from its launcher" in warning and "plugin settings" not in warning
+
+
+def test_a_settings_seat_is_pointed_at_the_plugin_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    module = load(monkeypatch, tmp_path, VOICE)
+    monkeypatch.setattr(module, "settings_source", "settings")
+    warning = module.token_warning() or ""
+    assert "plugin settings" in warning and "launcher" not in warning

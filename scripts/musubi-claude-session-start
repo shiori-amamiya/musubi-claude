@@ -15,7 +15,7 @@ import re
 import subprocess  # re-exported for adapter tests and fault injection
 from typing import Any
 
-from musubi_claude_runtime import runtime
+from musubi_claude_runtime import runtime, settings_source
 from musubi_harness.plugin_continuity import MAX_CONTENT, MAX_ROWS, PluginContinuity
 
 
@@ -91,13 +91,21 @@ def token_warning() -> str | None:
         return None
     sub = claims.get("sub")
     problems = []
-    if isinstance(sub, str) and sub != presence:
+    # A missing or non-string sub establishes no seat either (Yua's review of harness #12).
+    if sub != presence:
         problems.append(f"the Musubi token is for {_shown(sub)}, but this seat is {_shown(presence)}")
     if not _grants_write(claims.get("scope"), f"{presence}/episodic"):
         problems.append(f"the token cannot write {_shown(presence)}/episodic, so nothing will be delivered")
     if not problems:
         return None
-    return "Musubi memory: " + "; ".join(problems) + ". Enter the right token for this seat in the plugin settings."
+    # Say where THIS seat's token comes from: since #30 a seat whose launcher sets
+    # its identity also gets its token from the launcher, where the plugin
+    # settings have no effect (Aoi's review).
+    if settings_source == "environment":
+        fix = "This seat's token comes from its launcher (cc-start reads it from 1Password); fix it there."
+    else:
+        fix = "Enter the right token for this seat in the plugin settings."
+    return "Musubi memory: " + "; ".join(problems) + ". " + fix
 
 
 def main() -> int:
