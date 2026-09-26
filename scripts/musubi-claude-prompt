@@ -29,6 +29,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -172,6 +173,20 @@ def excerpt(content: str, query: str, width: int) -> str:
     return ("…" if best_at else "") + piece + ("…" if best_at < last else "")
 
 
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
+_OBJECT_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+_WORD = re.compile(r"[a-z]{1,24}")
+
+
+def clean(text: str) -> str:
+    """Printable text only: a memory can hold escape sequences or line separators."""
+    return " ".join(_CONTROL.sub(" ", text).split())
+
+
+def field(value: Any, pattern: re.Pattern[str]) -> str:
+    return value if isinstance(value, str) and pattern.fullmatch(value) else "?"
+
+
 def render(items: list[dict[str, Any]], query: str = "") -> tuple[str, list[str]]:
     """Whole items only, highest relevance first; say what was left out."""
     header = (
@@ -181,11 +196,13 @@ def render(items: list[dict[str, Any]], query: str = "") -> tuple[str, list[str]
     lines = [header]
     shown: list[str] = []
     for item in items:
-        content = excerpt(str(item.get("content", "")), query, MAX_ITEM_CHARS)
-        when = f" · {item['_created'][:10]}" if item.get("_created") else ""
+        content = excerpt(clean(str(item.get("content", ""))), query, MAX_ITEM_CHARS)
+        created = str(item.get("_created") or "")[:10]
+        when = f" · {created}" if re.fullmatch(r"\d{4}-\d{2}-\d{2}", created) else ""
         cut = " · first 300 chars only" if item.get("content_truncated") else ""
         line = (
-            f"- [{item['object_id']} · {item.get('plane', '?')} · {item.get('state', '?')}{when}"
+            f"- [{field(item['object_id'], _OBJECT_ID)} · {field(item.get('plane'), _WORD)}"
+            f" · {field(item.get('state'), _WORD)}{when}"
             f" · relevance {item['_relevance']:.2f}{cut}] {content}"
         )
         if sum(len(x) + 1 for x in lines) + len(line) + 60 > BUDGET_CHARS:
