@@ -17,6 +17,9 @@ lookup. Same state root: ``$PLUGIN_DATA`` (set by Claude Code) or
 
 from __future__ import annotations
 
+import os
+from collections.abc import MutableMapping
+
 from musubi_harness.plugin_runtime import (
     PluginRuntime,
     RuntimeConfig,
@@ -24,6 +27,41 @@ from musubi_harness.plugin_runtime import (
 )
 
 STATE_NAME = "musubi-claude"
+
+# Claude Code passes the plugin's /config settings (userConfig) to hooks as
+# CLAUDE_PLUGIN_OPTION_<KEY>, and .mcp.json forwards the same names into the
+# MCP server via ${user_config.<key>}. Users never set these by hand.
+_OPTION = "CLAUDE_PLUGIN_OPTION_"
+
+
+def apply_plugin_settings(environ: MutableMapping[str, str] | None = None) -> str:
+    """Map this plugin's settings onto the harness identity, in-process only.
+
+    Settings are active when ``actor`` is set; ``presence`` is built as
+    ``actor/seat`` so it always satisfies the harness's actor/presence rule.
+    With no ``actor``, the harness keeps reading its legacy ``config.json``
+    (existing installs are unaffected). A half-filled identity (actor
+    without seat) is passed through as-is so the harness refuses it with
+    ``partial_identity_config_refused`` instead of guessing.
+
+    Returns "settings" or "legacy", for status and tests.
+    """
+    env = os.environ if environ is None else environ
+    actor = env.get(_OPTION + "ACTOR", "").strip()
+    seat = env.get(_OPTION + "SEAT", "").strip()
+    zone = env.get(_OPTION + "ZONE", "").strip()
+    mode = env.get(_OPTION + "DELIVERY_MODE", "").strip()
+    if not actor:
+        return "legacy"
+    env["MUSUBI_ACTOR"] = actor
+    env["MUSUBI_PRESENCE"] = f"{actor}/{seat}" if seat else ""
+    env["MUSUBI_ZONE"] = zone
+    if mode:
+        env["MUSUBI_DELIVERY_MODE"] = mode
+    return "settings"
+
+
+settings_source = apply_plugin_settings()
 
 
 # Re-export the harness's PluginRuntime so it reads $PLUGIN_DATA (Claude
@@ -49,6 +87,8 @@ __all__ = [
     "RuntimeConfig",
     "RuntimeConfigError",
     "STATE_NAME",
+    "apply_plugin_settings",
+    "settings_source",
     "runtime",
     "data_root",
     "plugin_config",

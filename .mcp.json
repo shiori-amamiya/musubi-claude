@@ -1,7 +1,13 @@
 {
   "mcpServers": {
     "musubi-claude": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/musubi-claude-mcp"
+      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/musubi-claude-mcp",
+      "env": {
+        "CLAUDE_PLUGIN_OPTION_ACTOR": "${user_config.actor}",
+        "CLAUDE_PLUGIN_OPTION_SEAT": "${user_config.seat}",
+        "CLAUDE_PLUGIN_OPTION_ZONE": "${user_config.zone}",
+        "CLAUDE_PLUGIN_OPTION_DELIVERY_MODE": "${user_config.delivery_mode}"
+      }
     }
   }
 }
