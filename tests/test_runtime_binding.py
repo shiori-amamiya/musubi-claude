@@ -34,9 +34,7 @@ def test_state_name_segment_compliant() -> None:
     mod = importlib.import_module("scripts.musubi_claude_runtime")
     import re
 
-    assert re.fullmatch(r"^[a-z0-9][a-z0-9._-]*$", mod.STATE_NAME), (
-        f"STATE_NAME {mod.STATE_NAME!r} is not a valid segment"
-    )
+    assert re.fullmatch(r"^[a-z0-9][a-z0-9._-]*$", mod.STATE_NAME), f"STATE_NAME {mod.STATE_NAME!r} is not a valid segment"
 
 
 def test_runtime_instance_exposes_harness_contract() -> None:
@@ -83,10 +81,8 @@ def test_no_filesystem_walk_for_harness_lib() -> None:
 
     text = pathlib.Path(source_path).read_text(encoding="utf-8")
     assert "parents[3]" not in text, (
-        "binding contains 'parents[3]' — this is the legacy fleet-tools "
-        "filesystem walk for ../lib; the harness is a PyPI dep now"
+        "binding contains 'parents[3]' — this is the legacy fleet-tools filesystem walk for ../lib; the harness is a PyPI dep now"
     )
     assert "sys.path.insert" not in text, (
-        "binding contains 'sys.path.insert' — the harness is a PyPI dep "
-        "now and should be imported the normal way"
+        "binding contains 'sys.path.insert' — the harness is a PyPI dep now and should be imported the normal way"
     )

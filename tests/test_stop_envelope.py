@@ -131,16 +131,16 @@ def test_event_id_shape(stop_module: Any, transcript: Path, event: dict[str, Any
     assert envelope["event_id"] == "claude-code:s-abc:p-123"
 
 
-def test_event_id_uses_camelcase_aliases(
-    stop_module: Any, transcript: Path
-) -> None:
+def test_event_id_uses_camelcase_aliases(stop_module: Any, transcript: Path) -> None:
     """Aliases (promptId, lastAssistantMessage) are accepted alongside snake_case."""
-    envelope = stop_module.build_envelope({
-        "transcript_path": str(transcript),
-        "session_id": "s-abc",
-        "promptId": "p-123",
-        "lastAssistantMessage": "world",
-    })
+    envelope = stop_module.build_envelope(
+        {
+            "transcript_path": str(transcript),
+            "session_id": "s-abc",
+            "promptId": "p-123",
+            "lastAssistantMessage": "world",
+        }
+    )
     assert envelope["event_id"] == "claude-code:s-abc:p-123"
 
 
@@ -153,43 +153,51 @@ def test_alias_conflict_refused(stop_module: Any) -> None:
     stored under one id while the turn it describes belongs to another.
     """
     with pytest.raises(stop_module.AdapterError, match="prompt_id_conflict"):
-        stop_module.build_envelope({
-            "transcript_path": "/nonexistent",
-            "session_id": "s-abc",
-            "prompt_id": "p-123",
-            "promptId": "p-different",
-            "last_assistant_message": "world",
-        })
+        stop_module.build_envelope(
+            {
+                "transcript_path": "/nonexistent",
+                "session_id": "s-abc",
+                "prompt_id": "p-123",
+                "promptId": "p-different",
+                "last_assistant_message": "world",
+            }
+        )
 
 
 def test_missing_prompt_id_refused(stop_module: Any) -> None:
     """Without a prompt_id, no envelope is constructed."""
     with pytest.raises(stop_module.AdapterError, match="hook_prompt_id_missing"):
-        stop_module.build_envelope({
-            "transcript_path": "/nonexistent",
-            "session_id": "s-abc",
-            "last_assistant_message": "world",
-        })
+        stop_module.build_envelope(
+            {
+                "transcript_path": "/nonexistent",
+                "session_id": "s-abc",
+                "last_assistant_message": "world",
+            }
+        )
 
 
 def test_missing_session_id_refused(stop_module: Any) -> None:
     """Without a session_id, no envelope is constructed."""
     with pytest.raises(stop_module.AdapterError, match="hook_session_missing"):
-        stop_module.build_envelope({
-            "transcript_path": "/nonexistent",
-            "prompt_id": "p-123",
-            "last_assistant_message": "world",
-        })
+        stop_module.build_envelope(
+            {
+                "transcript_path": "/nonexistent",
+                "prompt_id": "p-123",
+                "last_assistant_message": "world",
+            }
+        )
 
 
 def test_missing_answer_refused(stop_module: Any) -> None:
     """Without a last_assistant_message, no envelope is constructed."""
     with pytest.raises(stop_module.AdapterError, match="hook_answer_missing"):
-        stop_module.build_envelope({
-            "transcript_path": "/nonexistent",
-            "session_id": "s-abc",
-            "prompt_id": "p-123",
-        })
+        stop_module.build_envelope(
+            {
+                "transcript_path": "/nonexistent",
+                "session_id": "s-abc",
+                "prompt_id": "p-123",
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -197,9 +205,7 @@ def test_missing_answer_refused(stop_module: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_envelope_projects_assistant_text_verbatim(
-    stop_module: Any, transcript: Path, event: dict[str, Any]
-) -> None:
+def test_envelope_projects_assistant_text_verbatim(stop_module: Any, transcript: Path, event: dict[str, Any]) -> None:
     """The Stop event's assistant_text is stored verbatim — no normalising."""
     raw = "  Hello, **world**!\n```\ncode block\n```\n"
     event["transcript_path"] = str(transcript)
@@ -208,9 +214,7 @@ def test_envelope_projects_assistant_text_verbatim(
     assert envelope["assistant_text"] == raw
 
 
-def test_envelope_carries_event_identity(
-    stop_module: Any, transcript: Path, event: dict[str, Any]
-) -> None:
+def test_envelope_carries_event_identity(stop_module: Any, transcript: Path, event: dict[str, Any]) -> None:
     """The envelope's identity keys come from the runtime, not the event."""
     event["transcript_path"] = str(transcript)
     envelope = stop_module.build_envelope(event)
@@ -233,9 +237,12 @@ def test_ismeta_only_prompt_falls_back(stop_module: Any, tmp_path: Path) -> None
     delivers as a single `isMeta=true` user record with no non-meta
     sibling. (See the long comment in `find_prompt_turn`.)
     """
-    path = _write_transcript(tmp_path, [
-        _prompt_record(prompt_id="p-bridge", text="Cross-session message", is_meta=True),
-    ])
+    path = _write_transcript(
+        tmp_path,
+        [
+            _prompt_record(prompt_id="p-bridge", text="Cross-session message", is_meta=True),
+        ],
+    )
     turn = stop_module.find_prompt_turn(path, "p-bridge")
     assert turn["user_text"] == "Cross-session message"
     assert turn["session_id"] == "s-abc"
@@ -243,10 +250,13 @@ def test_ismeta_only_prompt_falls_back(stop_module: Any, tmp_path: Path) -> None
 
 def test_prompt_id_ambiguous_refused(stop_module: Any, tmp_path: Path) -> None:
     """Two records under the same promptId with different content refuse closed."""
-    path = _write_transcript(tmp_path, [
-        _prompt_record(text="first"),
-        _prompt_record(text="second"),
-    ])
+    path = _write_transcript(
+        tmp_path,
+        [
+            _prompt_record(text="first"),
+            _prompt_record(text="second"),
+        ],
+    )
     with pytest.raises(stop_module.AdapterError, match="prompt_id_ambiguous"):
         stop_module.find_prompt_turn(path, "p-123")
 
@@ -291,22 +301,23 @@ def test_corrupt_line_skipped_not_bound(stop_module: Any, tmp_path: Path) -> Non
     assert turn["user_text"] == "hello"
 
 
-def test_transcript_session_mismatch_refused(
-    stop_module: Any, tmp_path: Path
-) -> None:
+def test_transcript_session_mismatch_refused(stop_module: Any, tmp_path: Path) -> None:
     """A prompt record with a sessionId different from the event's session_id is refused."""
-    path = _write_transcript(tmp_path, [
-        _prompt_record(session_id="s-DIFFERENT"),
-    ])
-    with pytest.raises(
-        stop_module.AdapterError, match="hook_session_transcript_mismatch"
-    ):
-        stop_module.build_envelope({
-            "transcript_path": str(path),
-            "session_id": "s-event",
-            "prompt_id": "p-123",
-            "last_assistant_message": "world",
-        })
+    path = _write_transcript(
+        tmp_path,
+        [
+            _prompt_record(session_id="s-DIFFERENT"),
+        ],
+    )
+    with pytest.raises(stop_module.AdapterError, match="hook_session_transcript_mismatch"):
+        stop_module.build_envelope(
+            {
+                "transcript_path": str(path),
+                "session_id": "s-event",
+                "prompt_id": "p-123",
+                "last_assistant_message": "world",
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
