@@ -8,7 +8,7 @@
 #   1. the plugin's own environment: $CLAUDE_PLUGIN_DATA/venv/bin/python
 #   2. a python3 on PATH that already imports musubi_harness (e.g. a user who
 #      ran `pip install musubi-harness` themselves)
-# The harness must be at least the version in scripts/harness-requirement; an
+# The harness must be at least the version in scripts/harness-minimum; an
 # older one (left by a previous setup) is refused as harness_outdated.
 # Otherwise the hook refuses to run, records why, and exits 0 so the Claude
 # Code session continues. The MCP server exits non-zero so /mcp shows it failed.
@@ -23,7 +23,11 @@ data="${CLAUDE_PLUGIN_DATA:-$HOME/.local/state/musubi-claude}"
 script="$root/scripts/musubi-claude-$component"
 shift
 
-required="$(sed -n 's/^musubi-harness==//p' "$root/scripts/harness-requirement" 2>/dev/null)"
+# The gate enforces the MINIMUM that runs everything (scripts/harness-minimum);
+# setup installs the pinned version (scripts/harness-requirement), which may be
+# newer. A newer pin that is only a speed-up must not force every install
+# through setup again.
+required="$(sed -n 's/^musubi-harness>=//p' "$root/scripts/harness-minimum" 2>/dev/null)"
 
 # version_lt A B: true when dotted version A is older than B. Each part is
 # compared by its leading digits; a part with a suffix (1.1.0rc1, 1.1.0.dev2)

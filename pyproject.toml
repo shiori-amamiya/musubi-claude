@@ -27,7 +27,7 @@ dependencies = [
     # adapter was originally written against inside fleet-tools. A 2.x
     # bump would be a deliberate breaking change for every adapter, not
     # this one in isolation.
-    "musubi-harness>=1.1.1,<2.0.0",
+    "musubi-harness>=1.2.0,<2.0.0",
 ]
 
 [project.urls]

@@ -41,7 +41,7 @@ jobs:
           # Pin the harness the plugin was developed against; bump in lock-step
           # with pyproject.toml. The harness version controls the contract the
           # adapter depends on.
-          pip install "musubi-harness>=1.1.1,<2.0.0"
+          pip install "musubi-harness>=1.2.0,<2.0.0"
           pip install -e .
           pip install ruff mypy pytest pytest-cov
 
