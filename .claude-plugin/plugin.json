@@ -2,7 +2,7 @@
   "name": "musubi-claude",
   "displayName": "Musubi Memory (Claude Code)",
   "version": "0.4.0",
-  "description": "First-class Claude Code adapter for Musubi memory: SessionStart continuity, Stop capture, a read-only recall MCP facade (recent/search/get/status) plus durable remember, and recall/continuity skills. Shadow-only by default \u2014 no remote write until delivery_mode is explicitly set to verified. Built on the shared musubi-harness runtime so the Claude and Codex seats share one contract.",
+  "description": "First-class Claude Code adapter for Musubi memory: SessionStart continuity, Stop capture, a read-only recall MCP facade (recent/search/get/status) plus durable remember, and recall/continuity skills. Shadow-only by default — no remote write until delivery_mode is explicitly set to verified. Built on the shared musubi-harness runtime so the Claude and Codex seats share one contract.",
   "author": {
     "name": "Eric Mey",
     "email": "ericmey@gmail.com",

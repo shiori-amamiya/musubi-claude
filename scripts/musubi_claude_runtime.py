@@ -18,7 +18,8 @@ lookup. Same state root: ``$PLUGIN_DATA`` (set by Claude Code) or
 from __future__ import annotations
 
 import os
-from collections.abc import MutableMapping
+from collections.abc import Mapping, MutableMapping
+from pathlib import Path
 
 from musubi_harness.plugin_runtime import (
     PluginRuntime,
@@ -64,10 +65,41 @@ def apply_plugin_settings(environ: MutableMapping[str, str] | None = None) -> st
 settings_source = apply_plugin_settings()
 
 
-# Re-export the harness's PluginRuntime so it reads $PLUGIN_DATA (Claude
-# Code's per-plugin data dir) or falls back to ~/.local/state/musubi-claude
-# in a non-hook shell.
-_runtime = PluginRuntime(STATE_NAME)
+def _has_state(path: Path) -> bool:
+    try:
+        return path.is_dir() and any(path.iterdir())
+    except OSError:
+        return False
+
+
+def resolve_state_root(environ: Mapping[str, str] | None = None, home: Path | None = None) -> tuple[Path | None, str]:
+    """Pick the state root to hand the harness, and say why.
+
+    Claude Code gives each plugin ``CLAUDE_PLUGIN_DATA`` (kept across updates,
+    removed on uninstall). The harness itself reads ``PLUGIN_DATA`` and
+    otherwise falls back to ``~/.local/state/musubi-claude``, which is where
+    every earlier install kept its outbox. Never split a live outbox: if the
+    legacy root holds state and the plugin data dir does not, keep the legacy
+    root and report it, so a move is a deliberate step, not a side effect.
+
+    Returns (default_data_root for PluginRuntime, source label), where the
+    label is "claude_plugin_data", "legacy_kept" or "legacy_default".
+    """
+    env = os.environ if environ is None else environ
+    legacy = (Path.home() if home is None else home) / ".local" / "state" / STATE_NAME
+    plugin_data = env.get("CLAUDE_PLUGIN_DATA", "").strip()
+    if not plugin_data:
+        return None, "legacy_default"
+    target = Path(plugin_data).expanduser()
+    if _has_state(legacy) and not _has_state(target):
+        return legacy, "legacy_kept"
+    return target, "claude_plugin_data"
+
+
+_default_root, state_root_source = resolve_state_root()
+# The harness still honours an explicit PLUGIN_DATA first; otherwise it uses
+# the root chosen above.
+_runtime = PluginRuntime(STATE_NAME, default_data_root=_default_root)
 
 # The shared thin bindings (mcp-facade, continuity) bind to this exact
 # instance so adapter behaviour cannot diverge from the harness contract.
@@ -89,6 +121,8 @@ __all__ = [
     "STATE_NAME",
     "apply_plugin_settings",
     "settings_source",
+    "resolve_state_root",
+    "state_root_source",
     "runtime",
     "data_root",
     "plugin_config",
