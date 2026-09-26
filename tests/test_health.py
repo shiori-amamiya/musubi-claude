@@ -120,7 +120,8 @@ def test_launcher_reports_not_set_up_as_data(tmp_path: Path) -> None:
         timeout=30,
     )
     assert done.returncode == 0
-    assert json.loads(done.stdout) == {"setup": False, "error": "harness_unavailable", "fix": "run /musubi-claude:setup"}
+    report = json.loads(done.stdout)
+    assert (report["setup"], report["error"], report["fix"]) == (False, "harness_unavailable", "run /musubi-claude:setup")
     # A read-only question is not a failed capture: nothing is recorded.
     assert not (tmp_path / "pd" / "degraded.jsonl").exists()
 

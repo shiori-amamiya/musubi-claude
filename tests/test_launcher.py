@@ -55,16 +55,65 @@ def test_mcp_without_setup_fails_visibly(tmp_path: Path) -> None:
     assert result.returncode == 1 and "musubi-claude:setup" in result.stderr
 
 
-def test_the_plugin_venv_python_is_used_when_present(tmp_path: Path) -> None:
-    data = tmp_path / "plugin-data"
+REQUIRED = (ROOT / "scripts" / "harness-requirement").read_text().strip().removeprefix("musubi-harness==")
+
+
+def fake_venv(data: Path, harness_version: str | None) -> None:
+    """A plugin venv whose python echoes its script, with harness metadata at a version."""
     fake = data / "venv" / "bin" / "python"
     fake.parent.mkdir(parents=True)
     fake.write_text('#!/bin/sh\necho "ran $1"\n')
     fake.chmod(0o755)
+    if harness_version is not None:
+        (data / "venv" / "lib" / "python3.12" / "site-packages" / f"musubi_harness-{harness_version}.dist-info").mkdir(parents=True)
+
+
+def test_the_plugin_venv_python_is_used_when_present(tmp_path: Path) -> None:
+    data = tmp_path / "plugin-data"
+    fake_venv(data, REQUIRED)
     result = run("stop", data)
     assert result.returncode == 0
     assert result.stdout.strip() == f"ran {ROOT / 'scripts' / 'musubi-claude-stop'}"
     assert not (data / "degraded.jsonl").exists()
+
+
+def test_a_newer_harness_than_required_is_used(tmp_path: Path) -> None:
+    data = tmp_path / "plugin-data"
+    fake_venv(data, "99.0.0")
+    assert run("stop", data).stdout.startswith("ran ")
+
+
+def test_a_venv_without_the_harness_counts_as_not_set_up(tmp_path: Path) -> None:
+    data = tmp_path / "plugin-data"
+    fake_venv(data, None)
+    result = run("stop", data)
+    assert result.stdout == "" and degraded(data)[0]["reason"] == "harness_unavailable:stop"
+
+
+# Aoi, 2026-09-26: after a plugin update raised the pin, a venv left by an
+# earlier setup still had musubi-harness 1.0.1, and every entry point died on
+# import with an AttributeError traceback and no hint.
+@pytest.mark.parametrize("old", ["1.0.1", "1.0.99", "1.1.0rc1"])
+def test_an_outdated_harness_is_refused_visibly_on_every_entry_point(tmp_path: Path, old: str) -> None:
+    data = tmp_path / "plugin-data"
+    fake_venv(data, old)
+
+    stop = run("stop", data)
+    assert stop.returncode == 0 and stop.stdout == ""  # never ran the old harness
+
+    start = run("session-start", data)
+    message = json.loads(start.stdout)["systemMessage"]
+    assert f"musubi-harness {old} is older than the required {REQUIRED}" in message
+    assert "/musubi-claude:setup" in message
+
+    mcp = run("mcp", data)
+    assert mcp.returncode == 1 and f"{old} is older than the required {REQUIRED}" in mcp.stderr
+    assert "Traceback" not in mcp.stderr
+
+    health = json.loads(run("health", data).stdout)
+    assert (health["setup"], health["error"], health["installed"], health["required"]) == (False, "harness_outdated", old, REQUIRED)
+
+    assert [r["reason"] for r in degraded(data)] == ["harness_outdated:stop", "harness_outdated:session-start", "harness_outdated:mcp"]
 
 
 def test_an_unknown_component_is_refused(tmp_path: Path) -> None:
