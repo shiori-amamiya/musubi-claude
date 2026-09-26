@@ -60,6 +60,18 @@ def _grants_write(scope: Any, namespace: str) -> bool:
     return False
 
 
+_PRESENCE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}/[a-z0-9][a-z0-9._-]{0,63}")
+
+
+def _shown(value: Any) -> str:
+    """An unverified claim as it may appear in a message: presence-shaped, or a label.
+
+    A token's sub is untrusted input; a newline or control characters in it must
+    not forge a second line in the systemMessage (Yua's review of harness #12).
+    """
+    return value if isinstance(value, str) and _PRESENCE.fullmatch(value) else "an unrecognised subject"
+
+
 def token_warning() -> str | None:
     """Say so when the Musubi token belongs to another presence or cannot write this one.
 
@@ -80,9 +92,9 @@ def token_warning() -> str | None:
     sub = claims.get("sub")
     problems = []
     if isinstance(sub, str) and sub != presence:
-        problems.append(f"the Musubi token is for {sub}, but this seat is {presence}")
+        problems.append(f"the Musubi token is for {_shown(sub)}, but this seat is {_shown(presence)}")
     if not _grants_write(claims.get("scope"), f"{presence}/episodic"):
-        problems.append(f"the token cannot write {presence}/episodic, so nothing will be delivered")
+        problems.append(f"the token cannot write {_shown(presence)}/episodic, so nothing will be delivered")
     if not problems:
         return None
     return "Musubi memory: " + "; ".join(problems) + ". Enter the right token for this seat in the plugin settings."
