@@ -78,17 +78,22 @@ def test_another_seats_token_is_named_on_the_first_turn(monkeypatch: pytest.Monk
     assert VOICE not in json.dumps(output) and "sig" not in message  # never the token
 
 
+# Fixtures follow musubi/auth/scopes.py exactly, not glob intuition.
 @pytest.mark.parametrize(
     ("scope", "writable"),
     [
         ("aoi/command-chair/*:rw", True),
-        ("**:rw", True),
+        ("aoi/command-chair/episodic:w", True),
+        ("aoi/*/episodic:rw", True),
         (["aoi/command-chair/*:rw"], True),
-        ("aoi/command-chair/**:w", True),
+        ("**:rw", False),  # a bare ** never grants write
         ("**:r", False),
-        ("aoi/command-chair:rw", False),  # the presence itself, not its episodic plane
+        ("aoi/command-chair/**:w", False),  # ** is only special on its own
+        ("aoi/**:rw", False),  # segment counts differ
         ("aoi/*:rw", False),  # one segment does not reach aoi/command-chair/episodic
-        ("aoi/**:rw", True),
+        ("aoi/command-chair:rw", False),  # the presence itself, not its episodic plane
+        ("aoi/command-chair/*:rwx", False),  # access must be exactly r, w or rw
+        ("aoi/command-chair/*:r", False),
     ],
 )
 def test_write_scope_matching(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, scope: Any, writable: bool) -> None:

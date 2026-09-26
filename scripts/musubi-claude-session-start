@@ -38,17 +38,24 @@ def _claims(token: str) -> dict[str, Any] | None:
 
 
 def _grants_write(scope: Any, namespace: str) -> bool:
-    """True when a scope entry ("pattern:perms") grants w on ``namespace``.
+    """True when a scope entry grants write on ``namespace``, exactly as Musubi decides.
 
-    ``**`` matches any depth and ``*`` one segment, as Musubi scopes are written.
+    Mirrors musubi/auth/scopes.py (_parse_namespace_scope, _namespace_matches,
+    _namespace_scope_allows): "pattern:access" split on the last colon, access
+    r, w or rw; a bare ``**`` matches everything but never grants write; any
+    other pattern needs the same number of segments, each ``*`` or literal.
+    A looser matcher would call a ``**:rw`` token fine and then 403 (Aoi's review).
     """
     entries = scope.split() if isinstance(scope, str) else scope if isinstance(scope, list) else []
+    wanted = namespace.split("/")
     for entry in entries:
         if not isinstance(entry, str) or ":" not in entry:
             continue
-        pattern, _, perms = entry.rpartition(":")
-        regex = "".join(".*" if p == "**" else "[^/]*" if p == "*" else re.escape(p) for p in re.split(r"(\*\*|\*)", pattern))
-        if "w" in perms and re.fullmatch(regex, namespace):
+        pattern, access = entry.rsplit(":", 1)
+        if access not in ("w", "rw") or pattern == "**":
+            continue
+        parts = pattern.split("/")
+        if len(parts) == len(wanted) and all(p == "*" or p == n for p, n in zip(parts, wanted, strict=True)):
             return True
     return False
 
