@@ -141,3 +141,31 @@ def test_hooks_and_mcp_start_through_the_launcher() -> None:
     mcp = json.loads((ROOT / ".mcp.json").read_text())["mcpServers"]["musubi-claude"]
     assert mcp["command"].endswith("scripts/musubi-claude-run") and mcp["args"] == ["mcp"]
     assert os.access(RUN, os.X_OK) and os.access(ROOT / "scripts" / "musubi-claude-setup", os.X_OK)
+
+
+def venv_with_pythons(data: Path, running: str, sites: dict[str, str], cfg_key: str = "version_info") -> None:
+    """A venv whose pyvenv.cfg names ``running``, with a harness per lib/pythonX.Y."""
+    fake = data / "venv" / "bin" / "python"
+    fake.parent.mkdir(parents=True)
+    fake.write_text('#!/bin/sh\necho "ran $1"\n')
+    fake.chmod(0o755)
+    (data / "venv" / "pyvenv.cfg").write_text(f"home = /usr/bin\n{cfg_key} = {running}\n")
+    for pyver, harness in sites.items():
+        (data / "venv" / "lib" / f"python{pyver}" / "site-packages" / f"musubi_harness-{harness}.dist-info").mkdir(parents=True)
+
+
+def test_a_re_setup_that_moved_python_reads_the_running_interpreter(tmp_path: Path) -> None:
+    # Measured live: re-running setup moved a venv from 3.12 to 3.14 in place and
+    # left lib/python3.12 (an old harness) behind.
+    data = tmp_path / "plugin-data"
+    venv_with_pythons(data, "3.14", {"3.12": "1.0.1", "3.14": REQUIRED})
+    assert run("stop", data).stdout.startswith("ran ")
+
+
+def test_a_stale_newer_harness_elsewhere_cannot_hide_an_outdated_one(tmp_path: Path) -> None:
+    # The reverse: the interpreter the venv runs has the old harness; a stale
+    # directory has a newer one. Only the running interpreter counts.
+    data = tmp_path / "plugin-data"
+    venv_with_pythons(data, "3.12.14", {"3.12": "1.0.1", "3.14": "99.0.0"}, cfg_key="version")
+    health = json.loads(run("health", data).stdout)
+    assert (health["error"], health["installed"]) == ("harness_outdated", "1.0.1")
