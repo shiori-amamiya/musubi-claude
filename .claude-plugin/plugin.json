@@ -50,6 +50,19 @@
         "verified"
       ],
       "default": "shadow"
+    },
+    "musubi_url": {
+      "type": "string",
+      "title": "Musubi URL",
+      "description": "Your Musubi server, e.g. https://musubi.example.com. Leave empty to keep an existing memory-data setup.",
+      "default": ""
+    },
+    "musubi_token": {
+      "type": "string",
+      "title": "Musubi token",
+      "description": "Your Musubi API token (a JWT). Stored in the system credential store, never in settings.json.",
+      "sensitive": true,
+      "default": ""
     }
   }
 }

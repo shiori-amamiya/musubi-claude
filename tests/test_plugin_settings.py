@@ -87,5 +87,43 @@ def test_manifest_and_mcp_forward_the_same_option_names() -> None:
     root = Path(__file__).resolve().parent.parent
     options = set(json.loads((root / ".claude-plugin" / "plugin.json").read_text())["userConfig"])
     env = json.loads((root / ".mcp.json").read_text())["mcpServers"]["musubi-claude"]["env"]
-    assert options == {"actor", "seat", "zone", "delivery_mode"}
+    assert options == {"actor", "seat", "zone", "delivery_mode", "musubi_url", "musubi_token"}
     assert env == {OPTION + key.upper(): f"${{user_config.{key}}}" for key in options}
+
+
+def test_only_the_token_is_sensitive() -> None:
+    import json
+
+    root = Path(__file__).resolve().parent.parent
+    config = json.loads((root / ".claude-plugin" / "plugin.json").read_text())["userConfig"]
+    assert [key for key, spec in config.items() if spec.get("sensitive")] == ["musubi_token"]
+
+
+TRANSPORT = {"MUSUBI_API_URL", "MUSUBI_TOKEN"}
+
+
+def transport_env(env: dict[str, str]) -> dict[str, str]:
+    with patch.dict(os.environ, env, clear=True):
+        apply_plugin_settings()
+        return {k: v for k, v in os.environ.items() if k in TRANSPORT}
+
+
+def test_url_and_token_settings_become_the_harness_transport_env() -> None:
+    env = settings(musubi_url="https://musubi.example.com", musubi_token="a.b.c")
+    assert transport_env(env) == {"MUSUBI_API_URL": "https://musubi.example.com", "MUSUBI_TOKEN": "a.b.c"}
+
+
+def test_transport_settings_apply_without_a_settings_identity() -> None:
+    # A legacy config.json identity can still use a URL and token from settings.
+    env = settings(actor="", musubi_url="https://musubi.example.com", musubi_token="a.b.c")
+    assert transport_env(env)["MUSUBI_API_URL"] == "https://musubi.example.com"
+
+
+def test_empty_transport_settings_never_clear_an_existing_setup() -> None:
+    existing = {"MUSUBI_API_URL": "https://house.example", "MUSUBI_TOKEN": "x.y.z"}
+    assert transport_env({**existing, **settings(musubi_url="", musubi_token="  ")}) == existing
+
+
+def test_transport_settings_outrank_an_inherited_environment() -> None:
+    env = {"MUSUBI_API_URL": "https://old.example", **settings(musubi_url="https://new.example")}
+    assert transport_env(env)["MUSUBI_API_URL"] == "https://new.example"

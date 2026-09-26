@@ -6,7 +6,9 @@
         "CLAUDE_PLUGIN_OPTION_ACTOR": "${user_config.actor}",
         "CLAUDE_PLUGIN_OPTION_SEAT": "${user_config.seat}",
         "CLAUDE_PLUGIN_OPTION_ZONE": "${user_config.zone}",
-        "CLAUDE_PLUGIN_OPTION_DELIVERY_MODE": "${user_config.delivery_mode}"
+        "CLAUDE_PLUGIN_OPTION_DELIVERY_MODE": "${user_config.delivery_mode}",
+        "CLAUDE_PLUGIN_OPTION_MUSUBI_URL": "${user_config.musubi_url}",
+        "CLAUDE_PLUGIN_OPTION_MUSUBI_TOKEN": "${user_config.musubi_token}"
       },
       "args": [
         "mcp"

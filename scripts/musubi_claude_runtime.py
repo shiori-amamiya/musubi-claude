@@ -35,6 +35,28 @@ STATE_NAME = "musubi-claude"
 _OPTION = "CLAUDE_PLUGIN_OPTION_"
 
 
+def apply_transport_settings(env: MutableMapping[str, str]) -> str:
+    """Map the Musubi URL and token settings onto the harness's child env.
+
+    musubi-harness (>=1.1.0) passes ``MUSUBI_API_URL`` and ``MUSUBI_TOKEN`` to
+    whichever memory-data it runs: its bundled HTTP client, or an operator
+    memory-data, which also honours them. Each is set only when its setting is
+    non-empty, so an unset field never clears an existing setup. The token is
+    a ``sensitive`` option: Claude Code keeps it in the credential store and
+    exports it only to this plugin's hooks and MCP server. Nothing here prints
+    or records it.
+
+    Returns "settings" when either value came from settings, else "none".
+    """
+    source = "none"
+    for option, target in (("MUSUBI_URL", "MUSUBI_API_URL"), ("MUSUBI_TOKEN", "MUSUBI_TOKEN")):
+        value = env.get(_OPTION + option, "").strip()
+        if value:
+            env[target] = value
+            source = "settings"
+    return source
+
+
 def apply_plugin_settings(environ: MutableMapping[str, str] | None = None) -> str:
     """Map this plugin's settings onto the harness identity, in-process only.
 
@@ -48,6 +70,7 @@ def apply_plugin_settings(environ: MutableMapping[str, str] | None = None) -> st
     Returns "settings" or "legacy", for status and tests.
     """
     env = os.environ if environ is None else environ
+    apply_transport_settings(env)
     actor = env.get(_OPTION + "ACTOR", "").strip()
     seat = env.get(_OPTION + "SEAT", "").strip()
     zone = env.get(_OPTION + "ZONE", "").strip()
