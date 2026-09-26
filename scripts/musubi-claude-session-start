@@ -8,7 +8,12 @@ hook's stdout as session context; this binding only prints that shared block.
 
 from __future__ import annotations
 
+import base64
+import json
+import os
+import re
 import subprocess  # re-exported for adapter tests and fault injection
+from typing import Any
 
 from musubi_claude_runtime import runtime
 from musubi_harness.plugin_continuity import MAX_CONTENT, MAX_ROWS, PluginContinuity
@@ -20,8 +25,69 @@ _rows = _continuity._rows
 _compact = _continuity._compact
 
 
+def _claims(token: str) -> dict[str, Any] | None:
+    """The token's JWT claims, decoded locally and unverified. Never the token itself."""
+    parts = token.split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(parts[1] + "=" * (-len(parts[1]) % 4)))
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return claims if isinstance(claims, dict) else None
+
+
+def _grants_write(scope: Any, namespace: str) -> bool:
+    """True when a scope entry ("pattern:perms") grants w on ``namespace``.
+
+    ``**`` matches any depth and ``*`` one segment, as Musubi scopes are written.
+    """
+    entries = scope.split() if isinstance(scope, str) else scope if isinstance(scope, list) else []
+    for entry in entries:
+        if not isinstance(entry, str) or ":" not in entry:
+            continue
+        pattern, _, perms = entry.rpartition(":")
+        regex = "".join(".*" if p == "**" else "[^/]*" if p == "*" else re.escape(p) for p in re.split(r"(\*\*|\*)", pattern))
+        if "w" in perms and re.fullmatch(regex, namespace):
+            return True
+    return False
+
+
+def token_warning() -> str | None:
+    """Say so when the Musubi token belongs to another presence or cannot write this one.
+
+    Aoi's 0.5.0 canary: the plugin token was another seat's (sub aoi/voice, read-only
+    on aoi/command-chair). Reads worked; every delivery 403'd at the drain, silently.
+    The claims decode locally, so the mismatch can be named on the first turn.
+    """
+    token = os.environ.get("MUSUBI_TOKEN", "").strip()
+    if not token:
+        return None
+    try:
+        presence = runtime.runtime_config().presence
+    except Exception:  # noqa: BLE001 - identity problems are reported elsewhere
+        return None
+    claims = _claims(token)
+    if claims is None:
+        return None
+    sub = claims.get("sub")
+    problems = []
+    if isinstance(sub, str) and sub != presence:
+        problems.append(f"the Musubi token is for {sub}, but this seat is {presence}")
+    if not _grants_write(claims.get("scope"), f"{presence}/episodic"):
+        problems.append(f"the token cannot write {presence}/episodic, so nothing will be delivered")
+    if not problems:
+        return None
+    return "Musubi memory: " + "; ".join(problems) + ". Enter the right token for this seat in the plugin settings."
+
+
 def main() -> int:
-    print(continuity_block())
+    warning = token_warning()
+    block = continuity_block()
+    if warning is None:
+        print(block)  # unchanged output when the token fits this seat
+        return 0
+    print(json.dumps({"systemMessage": warning, "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": block}}))
     return 0
 
 

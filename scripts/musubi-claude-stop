@@ -332,7 +332,7 @@ def without_batch_flags(command: list[str]) -> list[str] | None:
     return command[: -len(BATCH_DRAIN)]
 
 
-_REASON = re.compile(r"[a-z_]{1,64}")
+_REASON = re.compile(r"[A-Za-z_]{1,64}")  # codes, and exception class names from a batch error row
 
 
 def stalled_reason(stdout: str) -> str | None:
