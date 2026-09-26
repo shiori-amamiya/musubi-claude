@@ -94,3 +94,38 @@ def test_the_drain_timeout_covers_a_full_row_and_fits_the_hook(monkeypatch: pyte
     assert drain_timeout > budget + 4 * per_call
     hook = _json.loads((Path(__file__).resolve().parents[1] / "hooks" / "hooks.json").read_text())["hooks"]["Stop"][0]["hooks"][0]
     assert stage_timeout + drain_timeout < hook["timeout"]
+
+
+@pytest.mark.parametrize(
+    ("stdout", "expected"),
+    [
+        (json.dumps({"ok": True, "result": {"state": "verified"}, "results": [{"state": "verified"}]}), None),
+        (json.dumps({"ok": True, "result": {"state": "idle"}}), None),
+        (json.dumps({"ok": True, "result": {"state": "pending", "reason": "memory_data_request_failed"}}), "memory_data_request_failed"),
+        (
+            json.dumps({"ok": True, "results": [{"state": "verified"}, {"state": "pending", "reason": "receipt_lookup_unknown"}]}),
+            "receipt_lookup_unknown",
+        ),
+        (json.dumps({"ok": True, "results": [{"state": "error", "reason": "Server said: Bearer eyJhbG…"}]}), "unknown"),
+        ("[1, 2]", None),
+        ("not json", None),
+    ],
+    ids=["verified", "idle", "stalled", "stalled-after-progress", "server-text-never-recorded", "non-dict", "garbage"],
+)
+def test_stalled_reason(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, stdout: str, expected: str | None) -> None:
+    stop = load_stop(monkeypatch, tmp_path, **SETTINGS)
+    assert stop.stalled_reason(stdout) == expected
+
+
+def test_a_drain_that_makes_no_progress_is_recorded(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # Aoi's canary: every pass 403'd on receipt lookup, the drain exited 0, and
+    # nothing was recorded, so the outbox grew silently.
+    stalled = json.dumps(
+        {
+            "ok": True,
+            "result": {"state": "pending", "reason": "memory_data_request_failed"},
+            "results": [{"state": "pending", "reason": "memory_data_request_failed"}],
+        }
+    )
+    run_stop(monkeypatch, tmp_path, lambda argv: subprocess.CompletedProcess(argv, 0, stalled, ""))
+    assert degraded(tmp_path) == ["delivery_stalled:memory_data_request_failed"]
