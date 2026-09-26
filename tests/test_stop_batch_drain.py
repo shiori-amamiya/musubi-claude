@@ -74,3 +74,23 @@ def test_any_other_failure_is_not_retried(monkeypatch: pytest.MonkeyPatch, tmp_p
     _, drains = run_stop(monkeypatch, tmp_path, lambda argv: subprocess.CompletedProcess(argv, 2, failed, ""))
     assert len(drains) == 1
     assert degraded(tmp_path) == ["verified_delivery_failed:exit=2"]
+
+
+def test_the_drain_timeout_covers_a_full_row_and_fits_the_hook(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    import json as _json
+
+    stop = load_stop(
+        monkeypatch,
+        tmp_path,
+        **SETTINGS,
+        **{OPTION + "DELIVERY_MODE": "verified"},
+        MUSUBI_HARNESS_BIN="/opt/fake/musubi-harness",
+        MUSUBI_MEMORY_DATA_BIN="/opt/fake/memory-data",
+    )
+    commands = stop.delivery_commands({"actor": "aoi", "zone": "home", "event_id": "claude-code:s:p"}, stop.runtime_config())
+    (stage, stage_timeout, _), (drain, drain_timeout, _) = commands
+    budget = float(drain[drain.index("--budget-seconds") + 1])
+    per_call = float(drain[drain.index("--timeout") + 1])
+    assert drain_timeout > budget + 4 * per_call
+    hook = _json.loads((Path(__file__).resolve().parents[1] / "hooks" / "hooks.json").read_text())["hooks"]["Stop"][0]["hooks"][0]
+    assert stage_timeout + drain_timeout < hook["timeout"]

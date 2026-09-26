@@ -318,7 +318,10 @@ def _harness() -> str:
 # several rows per pass. The harness that runs is whatever binary is configured, not
 # necessarily this venv's, so an older one that rejects the flags is retried once
 # without them (see without_batch_flags).
-BATCH_DRAIN = ["--max", "5", "--budget-seconds", "10"]
+# Budget 3 s: one row is up to 4 memory-data calls at --timeout 5 (20 s), so the
+# drain's process timeout (24 s) covers a row started just before the budget
+# ends, and stage (5 s) + drain stays inside the 30 s Stop hook timeout.
+BATCH_DRAIN = ["--max", "5", "--budget-seconds", "3"]
 
 
 def without_batch_flags(command: list[str]) -> list[str] | None:
@@ -362,7 +365,7 @@ def delivery_commands(
                 "5",
                 *BATCH_DRAIN,
             ],
-            15,
+            24,
             True,
         ),
     ]
