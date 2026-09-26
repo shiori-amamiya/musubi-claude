@@ -66,8 +66,14 @@ settings_source = apply_plugin_settings()
 
 
 def _has_state(path: Path) -> bool:
+    """True when ``path`` holds harness state: its ``config.json`` or an outbox.
+
+    The harness keeps one outbox per identity at ``<actor>/<zone>/shadow.db``.
+    Anything else (the plugin's own ``venv/`` from setup, a ``degraded.jsonl``
+    written while not set up) is not state and must not move the root.
+    """
     try:
-        return path.is_dir() and any(path.iterdir())
+        return (path / "config.json").is_file() or any(path.glob("*/*/shadow.db"))
     except OSError:
         return False
 
